@@ -47,7 +47,7 @@ function renderOptions() {
   const options = (lastInfo?.options || []).filter((item) => item.kind === activeKind);
 
   if (!options.length) {
-    optionsEl.innerHTML = '<p class="meta">Для этого типа нет доступных вариантов.</p>';
+    optionsEl.innerHTML = '<p class="meta">No formats available for this type.</p>';
     return;
   }
 
@@ -62,14 +62,14 @@ function renderOptions() {
 
     const kind = document.createElement("p");
     kind.className = "option-kind";
-    kind.textContent = item.kind === "audio" ? "Только аудио, MP3 после конвертации" : "Видео";
+    kind.textContent = item.kind === "audio" ? "Audio only, converted to MP3" : "Video";
 
     copy.append(title, kind);
 
     const button = document.createElement("button");
     button.className = "download";
     button.type = "button";
-    button.textContent = "Скачать";
+    button.textContent = "Download";
     button.addEventListener("click", () => download(item, button));
 
     row.append(copy, button);
@@ -85,13 +85,13 @@ async function download(item, button) {
 
   button.disabled = true;
   button.textContent = "...";
-  setStatus("Готовлю файл. Для больших видео это может занять время.");
+  setStatus("Preparing your file. Large videos may take some time.");
 
   try {
     const response = await fetch("/api/download", { method: "POST", body });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      setStatus(error.detail || "Не удалось скачать файл.", true);
+      setStatus(error.detail || "Could not download the file.", true);
       return;
     }
 
@@ -109,12 +109,12 @@ async function download(item, button) {
     link.click();
     link.remove();
     URL.revokeObjectURL(href);
-    setStatus("Файл готов.");
+    setStatus("Your file is ready.");
   } catch (error) {
     setStatus(error.message, true);
   } finally {
     button.disabled = false;
-    button.textContent = "Скачать";
+    button.textContent = "Download";
   }
 }
 
@@ -122,14 +122,14 @@ form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const body = new FormData(form);
   resultEl.hidden = true;
-  setStatus("Читаю доступные форматы...");
+  setStatus("Loading available formats...");
   form.querySelector("button").disabled = true;
 
   try {
     const response = await fetch("/api/info", { method: "POST", body });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      setStatus(error.detail || "Не удалось получить список форматов.", true);
+      setStatus(error.detail || "Could not load available formats.", true);
       return;
     }
 

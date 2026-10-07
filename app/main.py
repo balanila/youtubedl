@@ -23,7 +23,7 @@ DOWNLOAD_DIR = Path(os.getenv("YTDLP_DOWNLOAD_DIR", BASE_DIR / "downloads"))
 
 DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-app = FastAPI(title="YouTube downloader")
+app = FastAPI(title="Youtube Downloader")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -53,7 +53,7 @@ def validate_youtube_url(url: str) -> str:
     parsed = urlparse(url.strip())
     host = (parsed.hostname or "").lower()
     if parsed.scheme not in {"http", "https"} or host not in YOUTUBE_HOSTS:
-        raise HTTPException(status_code=400, detail="Введите корректный URL YouTube.")
+        raise HTTPException(status_code=400, detail="Enter a valid YouTube URL.")
     return url.strip()
 
 
@@ -80,20 +80,20 @@ def extract_info(url: str) -> dict[str, Any]:
         with YoutubeDL(ydl_info_options()) as ydl:
             return ydl.extract_info(url, download=False)
     except DownloadError as exc:
-        raise HTTPException(status_code=422, detail=f"Не удалось прочитать видео: {exc}") from exc
+        raise HTTPException(status_code=422, detail=f"Could not retrieve video information: {exc}") from exc
 
 
 def format_size(fmt: dict[str, Any]) -> str:
     size = fmt.get("filesize") or fmt.get("filesize_approx")
     if not size:
-        return "размер неизвестен"
+        return "unknown size"
     units = ["B", "KB", "MB", "GB"]
     value = float(size)
     for unit in units:
         if value < 1024 or unit == units[-1]:
             return f"{value:.1f} {unit}"
         value /= 1024
-    return "размер неизвестен"
+    return "unknown size"
 
 
 def format_label(fmt: dict[str, Any], kind: str) -> str:
@@ -188,7 +188,7 @@ def build_format_options(info: dict[str, Any]) -> list[dict[str, Any]]:
                 "kind": "video",
                 "format_id": "best",
                 "download_format": "best",
-                "label": "Лучшее доступное качество",
+                "label": "Best available quality",
                 "ext": "mp4",
                 "has_audio": True,
             }
@@ -232,7 +232,7 @@ def download(
 ) -> FileResponse:
     checked_url = validate_youtube_url(url)
     if kind not in {"video", "audio"}:
-        raise HTTPException(status_code=400, detail="Некорректный тип скачивания.")
+        raise HTTPException(status_code=400, detail="Invalid download type.")
 
     temp_dir = Path(tempfile.mkdtemp(prefix="ytdlp-", dir=DOWNLOAD_DIR))
     output_template = str(temp_dir / "%(title).120B.%(ext)s")
@@ -260,7 +260,7 @@ def download(
 
         files = [path for path in temp_dir.iterdir() if path.is_file() and not path.name.endswith(".part")]
         if not files:
-            raise HTTPException(status_code=500, detail="Файл не был создан.")
+            raise HTTPException(status_code=500, detail="No file was created.")
 
         result = max(files, key=lambda path: path.stat().st_size)
         if kind == "audio" and result.suffix.lower() != ".mp3":
@@ -277,7 +277,7 @@ def download(
         )
     except DownloadError as exc:
         shutil.rmtree(temp_dir, ignore_errors=True)
-        raise HTTPException(status_code=422, detail=f"Не удалось скачать файл: {exc}") from exc
+        raise HTTPException(status_code=422, detail=f"Could not download the file: {exc}") from exc
     except Exception:
         shutil.rmtree(temp_dir, ignore_errors=True)
         raise

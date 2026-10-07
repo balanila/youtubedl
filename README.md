@@ -1,4 +1,4 @@
-# YouTube Downloader
+# Youtube Downloader
 
 A Dockerized web application for downloading YouTube videos and audio. Paste a YouTube URL, choose a video resolution or audio format, and download the file to your browser. Temporary files are deleted after transmission.
 
@@ -14,11 +14,7 @@ Start the application:
 docker compose up --build
 ```
 
-Open the application in your browser:
-
-```text
-http://localhost:8000
-```
+Connect your reverse proxy to the Docker network `web` and configure its upstream as `http://youtubedl:8000`. Open the application using the URL configured in your reverse proxy. Port `8000` is internal to the container and is not published on the host.
 
 ## Supported Architectures
 
@@ -37,23 +33,23 @@ docker buildx build --platform linux/arm64 -t youtubedl:local --load .
 docker buildx build --platform linux/amd64 -t youtubedl:local --load .
 ```
 
-## GitHub Actions: NAS Deployment
+## GitHub Actions: Deploy to Your Server
 
-The workflow in `.github/workflows/deploy.yml` runs on pushes to `main`. It can also be triggered manually from **Actions → Deploy to NAS → Run workflow**, with `main` selected.
+The workflow in `.github/workflows/deploy.yml` runs on pushes to `main`. To trigger it manually, select the deployment workflow in **Actions**, click **Run workflow**, and select `main`.
 
-The deployment job uses a runner with these labels:
+Install a self-hosted GitHub Actions runner on your Linux server. Set `jobs.deploy.runs-on` in `.github/workflows/deploy.yml` to match your runner's labels, for example:
 
 ```yaml
-runs-on: [self-hosted, linux, linux-nas]
+runs-on: [self-hosted, linux]
 ```
 
-Install Bash and Docker on the runner host, and ensure the runner user can access the NAS Docker daemon. If the runner itself runs in a container, it needs the Docker CLI and access to the host's Docker daemon. Keep the GitHub Actions runner up to date to meet the [requirements for `actions/checkout@v6`](https://github.com/actions/checkout#whats-new).
+Install Bash and Docker on the server, and ensure the runner user can access the server's Docker daemon. If the runner itself runs in a container, it needs the Docker CLI and access to the host's Docker daemon. Keep the GitHub Actions runner up to date to meet the [requirements for `actions/checkout@v6`](https://github.com/actions/checkout#whats-new).
 
-The pipeline builds `youtubedl:<commit SHA>` directly on the runner, replaces the `youtubedl` container using `docker run`, and checks that the application responds over HTTP. Deployment does not use Docker Compose and requires no container registry or secrets. The application is available at `http://<NAS-address>:8000`. Port `8000` must be available before the first deployment.
+The pipeline builds `youtubedl:<commit SHA>` directly on the runner, replaces the `youtubedl` container using `docker run`, and checks that the application responds over HTTP inside the container. Deployment does not use Docker Compose and requires no container registry or secrets. Access the application through your reverse proxy; port `8000` is not published on the server.
 
-The container joins the existing Docker network `web` at startup. Create this network on the NAS before the first deployment if needed: `docker network create web`. The workflow checks that the network exists before stopping the current container. Other containers on this network can reach the application at `http://youtubedl:8000`.
+The container joins the existing Docker network `web` at startup. Create this network on your server before the first deployment if needed: `docker network create web`. The workflow checks that the network exists before stopping the current container. Connect your reverse proxy to this network and configure its upstream as `http://youtubedl:8000`.
 
-Downloads are temporarily stored in `/data/downloads` inside the container. Each download's temporary directory is deleted after transmission to the browser, including when transmission fails or the connection is interrupted. No persistent volume is used. Replacing the container also removes files left behind by a process crash. Files from earlier deployments using the `youtubedl-downloads` volume or the `app/downloads` bind mount must be removed separately.
+Downloads are temporarily stored in `/data/downloads` inside the container. Each download's temporary directory is deleted after transmission to the browser, including when transmission fails or the connection is interrupted. No persistent volume is used. Replacing the container also removes files left behind by a process crash.
 
 The container uses `--restart unless-stopped`, and deployments run one at a time. Replacing the container causes brief downtime and may interrupt active downloads. If the startup check fails, the workflow prints container logs and exits with an error. There is no automatic rollback.
 
