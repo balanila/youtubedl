@@ -1,0 +1,88 @@
+name: Deploy to NAS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: youtubedl-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, linux-nas]
+    timeout-minutes: 30
+    env:
+      IMAGE_NAME: youtubedl
+      CONTAINER_NAME: youtubedl
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Build image
+        run: |
+          set -euo pipefail
+          docker info
+          docker build --pull --tag "$IMAGE_NAME:$GITHUB_SHA" .
+
+      - name: Deploy container
+        run: |
+          set -euo pipefail
+          docker network inspect web >/dev/null
+          if docker container inspect "$CONTAINER_NAME" >/dev/null 2>&1; then
+            docker stop --timeout 30 "$CONTAINER_NAME"
+            docker rm "$CONTAINER_NAME"
+          fi
+          docker run --detach \
+            --name "$CONTAINER_NAME" \
+            --network web \
+            --restart unless-stopped \
+            --publish 8000:8000 \
+            --health-cmd "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/\", timeout=3)'" \
+            --health-interval 5s \
+            --health-timeout 5s \
+            --health-start-period 10s \
+            --health-retries 3 \
+            "$IMAGE_NAME:$GITHUB_SHA"
+
+      - name: Verify deployment
+        run: |
+          set -euo pipefail
+          for attempt in {1..30}; do
+            status="$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME")"
+            if [ "$status" = healthy ]; then
+              echo "Deployment is healthy: port 8000"
+              exit 0
+            fi
+            if [ "$status" = unhealthy ]; then
+              break
+            fi
+            sleep 2
+          done
+          docker logs --tail 100 "$CONTAINER_NAME"
+          docker inspect --format '{{json .State}}' "$CONTAINER_NAME"
+          exit 1
+
+      - name: Remove old application images
+        run: |
+          set -euo pipefail
+          while IFS= read -r image; do
+            if [ "$image" = "$IMAGE_NAME:$GITHUB_SHA" ]; then
+              continue
+            fi
+            if [ -n "$(docker container ls --all --quiet --filter "ancestor=$image")" ]; then
+              echo "Keeping image used by a container: $image"
+              continue
+            fi
+            docker image rm "$image"
+          done < <(docker image ls "$IMAGE_NAME" --format '{{.Repository}}:{{.Tag}}')
