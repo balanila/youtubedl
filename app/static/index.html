@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>YouTube downloader</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel">
+        <div class="heading">
+          <p class="eyebrow">yt-dlp · Docker</p>
+          <h1>YouTube downloader</h1>
+        </div>
+
+        <form id="info-form" class="url-form">
+          <input id="url" name="url" type="url" aria-label="Ссылка на YouTube" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" required>
+          <button type="submit">Показать варианты</button>
+        </form>
+
+        <p id="status" class="status" role="status"></p>
+
+        <section id="result" class="result" hidden>
+          <div class="video-head">
+            <img id="thumbnail" class="thumbnail" alt="">
+            <div>
+              <h2 id="title"></h2>
+              <p id="meta" class="meta"></p>
+            </div>
+          </div>
+
+          <div class="tabs" role="tablist" aria-label="Тип скачивания">
+            <button class="tab active" type="button" data-kind="video">Видео</button>
+            <button class="tab" type="button" data-kind="audio">Аудио</button>
+          </div>
+
+          <div id="options" class="options"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
