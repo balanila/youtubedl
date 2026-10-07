@@ -4,8 +4,6 @@ services:
     container_name: youtubedl
     networks:
       - web
-    ports:
-      - "8000:8000"
     restart: unless-stopped
 
 networks:

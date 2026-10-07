@@ -1,22 +1,21 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>YouTube downloader</title>
+    <title>Youtube Downloader</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <main class="shell">
       <section class="panel">
         <div class="heading">
-          <p class="eyebrow">yt-dlp · Docker</p>
-          <h1>YouTube downloader</h1>
+          <h1>Youtube Downloader</h1>
         </div>
 
         <form id="info-form" class="url-form">
-          <input id="url" name="url" type="url" aria-label="Ссылка на YouTube" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" required>
-          <button type="submit">Показать варианты</button>
+          <input id="url" name="url" type="url" aria-label="YouTube URL" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" required>
+          <button type="submit">Show formats</button>
         </form>
 
         <p id="status" class="status" role="status"></p>
@@ -30,9 +29,9 @@
             </div>
           </div>
 
-          <div class="tabs" role="tablist" aria-label="Тип скачивания">
-            <button class="tab active" type="button" data-kind="video">Видео</button>
-            <button class="tab" type="button" data-kind="audio">Аудио</button>
+          <div class="tabs" role="tablist" aria-label="Download type">
+            <button class="tab active" type="button" data-kind="video">Video</button>
+            <button class="tab" type="button" data-kind="audio">Audio</button>
           </div>
 
           <div id="options" class="options"></div>

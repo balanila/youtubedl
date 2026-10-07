@@ -47,7 +47,6 @@ jobs:
             --name "$CONTAINER_NAME" \
             --network web \
             --restart unless-stopped \
-            --publish 8000:8000 \
             --health-cmd "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/\", timeout=3)'" \
             --health-interval 5s \
             --health-timeout 5s \
@@ -61,7 +60,7 @@ jobs:
           for attempt in {1..30}; do
             status="$(docker inspect --format '{{.State.Health.Status}}' "$CONTAINER_NAME")"
             if [ "$status" = healthy ]; then
-              echo "Deployment is healthy: port 8000"
+              echo "Deployment is healthy"
               exit 0
             fi
             if [ "$status" = unhealthy ]; then
