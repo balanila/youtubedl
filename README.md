@@ -45,7 +45,26 @@ runs-on: [self-hosted, linux]
 
 Install Bash and Docker on the server, and ensure the runner user can access the server's Docker daemon. If the runner itself runs in a container, it needs the Docker CLI and access to the host's Docker daemon. Keep the GitHub Actions runner up to date to meet the [requirements for `actions/checkout@v6`](https://github.com/actions/checkout#whats-new).
 
-The pipeline builds `youtubedl:<commit SHA>` directly on the runner, replaces the `youtubedl` container using `docker run`, and checks that the application responds over HTTP inside the container. Deployment does not use Docker Compose and requires no container registry or secrets. Access the application through your reverse proxy; port `8000` is not published on the server.
+Set these repository secrets in **Settings → Secrets and variables → Actions**:
+
+- `DOCKERHUB_USERNAME`: your Docker Hub username.
+- `DOCKERHUB_TOKEN`: a Docker Hub personal access token with `read/write/delete` scope for publishing images and updating the repository description. For an organization's repository, the user must have Admin permissions for that repository.
+
+The default image repository is `balanial/yourubedl`. To publish to another repository, set the repository variable `DOCKERHUB_IMAGE` to `your-username/youtubedl`. Create the repository on Docker Hub before the first publication and ensure the token can push to it.
+
+After publishing the image and recording its version, the workflow updates the Docker Hub repository description from `README.dockerhub.md`. This separate README contains startup and usage instructions for image users. If you change the image repository, update the image names in that file as well. A failed description update fails the workflow before deployment.
+
+Versions follow SemVer and are calculated from the latest reachable `vMAJOR.MINOR.PATCH` Git tag. After merging a pull request into `main`, its source branch determines the increment:
+
+- `bugfix/…` or `hotfix/…`: increment patch, for example `1.2.3` → `1.2.4`.
+- `feature/…`: increment minor and reset patch, for example `1.2.3` → `1.3.0`.
+- Direct pushes to `main` or other branch prefixes: increment patch.
+
+If several pull requests have merged since the previous version, the workflow increments once, with a feature taking precedence over fixes. Branch names are read from the GitHub pull request API, so merge, squash, and rebase merges are supported. Before the first version tag exists, `INITIAL_VERSION` in the workflow (default `1.0.0`) is the base, and the current commit determines the increment. For a major release, create a new `vMAJOR.0.0` tag on `main` and run the workflow for that commit.
+
+The workflow publishes both `<image repository>:MAJOR.MINOR.PATCH` and `<image repository>:latest`, then records the published version as a Git tag on the built commit. Rerunning a tagged commit reuses its version. The workflow needs `contents: write` to create tags and `pull-requests: read` to read source branches; repository rules must allow its token to create `v*` tags. The image also includes OCI version and commit revision labels. Published versions appear in the workflow run summary.
+
+The pipeline builds directly on the runner, publishes the image, replaces the `youtubedl` container using the exact versioned image with `docker run`, and checks that the application responds over HTTP inside the container. If publication fails, deployment does not start. Deployment does not use Docker Compose. Access the application through your reverse proxy; port `8000` is not published on the server.
 
 The container joins the existing Docker network `web` at startup. Create this network on your server before the first deployment if needed: `docker network create web`. The workflow checks that the network exists before stopping the current container. Connect your reverse proxy to this network and configure its upstream as `http://youtubedl:8000`.
 
@@ -53,7 +72,7 @@ Downloads are temporarily stored in `/data/downloads` inside the container. Each
 
 The container uses `--restart unless-stopped`, and deployments run one at a time. Replacing the container causes brief downtime and may interrupt active downloads. If the startup check fails, the workflow prints container logs and exits with an error. There is no automatic rollback.
 
-After a successful deployment check, the workflow removes older `youtubedl` images that are no longer used by any container. The deployed image and images used by running or stopped containers are kept. Images belonging to other applications are unaffected.
+After a successful deployment check, the workflow removes older local images from the configured image repository that are no longer used by any container. The deployed version, `latest`, and images used by running or stopped containers are kept. Published versions on Docker Hub are retained. Images belonging to other applications are unaffected.
 
 ## GitLab CI
 
