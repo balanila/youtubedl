@@ -6,7 +6,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: read
 
 concurrency:
   group: youtubedl-deploy
@@ -18,8 +19,9 @@ jobs:
     runs-on: [self-hosted, linux, linux-nas]
     timeout-minutes: 30
     env:
-      IMAGE_NAME: youtubedl
+      IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE || 'balanial/yourubedl' }}
       CONTAINER_NAME: youtubedl
+      INITIAL_VERSION: '1.0.0'
     defaults:
       run:
         shell: bash
@@ -28,12 +30,119 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      - name: Validate Docker Hub credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          : "${DOCKERHUB_USERNAME:?Set the DOCKERHUB_USERNAME repository secret}"
+          : "${DOCKERHUB_TOKEN:?Set the DOCKERHUB_TOKEN repository secret}"
+
+      - name: Prepare image version
+        id: version
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pattern = /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+            const readGit = async (args) => {
+              const result = await exec.getExecOutput('git', args, { silent: true });
+              return result.stdout.trim().split('\n').filter(Boolean);
+            };
+            const exportVersion = (version, createTag) => {
+              core.exportVariable('IMAGE_VERSION', version);
+              core.setOutput('create-tag', createTag);
+              core.info(`Image version: ${version}`);
+            };
+            const currentTags = await readGit([
+              'tag', '--points-at', context.sha, '--sort=-version:refname'
+            ]);
+            const currentTag = currentTags.find((tag) => pattern.test(tag));
+            if (currentTag) {
+              exportVersion(currentTag.slice(1), false);
+              return;
+            }
+            const releasedTags = await readGit([
+              'tag', '--merged', context.sha, '--sort=-version:refname'
+            ]);
+            const previousTag = releasedTags.find((tag) => pattern.test(tag));
+            const baseTag = previousTag || `v${process.env.INITIAL_VERSION}`;
+            if (!pattern.test(baseTag)) {
+              throw new Error(`Invalid initial SemVer version: ${baseTag}`);
+            }
+            const commits = previousTag
+              ? await readGit(['rev-list', '--first-parent', `${previousTag}..${context.sha}`])
+              : [context.sha];
+            let bump = 'patch';
+            for (const commit of commits) {
+              const pulls = await github.paginate(
+                github.rest.repos.listPullRequestsAssociatedWithCommit,
+                { ...context.repo, commit_sha: commit, per_page: 100 }
+              );
+              for (const pull of pulls) {
+                if (!pull.merged_at || pull.base.ref !== 'main') {
+                  continue;
+                }
+                const branch = pull.head.ref;
+                if (branch.startsWith('feature/')) {
+                  bump = 'minor';
+                } else if (/^(bugfix|hotfix)\//.test(branch)) {
+                  core.info(`Patch change from ${branch}`);
+                }
+              }
+            }
+            const [, major, minor, patch] = baseTag.match(pattern);
+            const version = bump === 'minor'
+              ? `${major}.${BigInt(minor) + 1n}.0`
+              : `${major}.${minor}.${BigInt(patch) + 1n}`;
+            exportVersion(version, true);
 
       - name: Build image
         run: |
           set -euo pipefail
           docker info
-          docker build --pull --tag "$IMAGE_NAME:$GITHUB_SHA" .
+          docker build --pull \
+            --label "org.opencontainers.image.version=$IMAGE_VERSION" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag "$IMAGE_NAME:$IMAGE_VERSION" \
+            --tag "$IMAGE_NAME:latest" .
+
+      - name: Publish image to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKER_CONFIG: ${{ runner.temp }}/docker-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$DOCKER_CONFIG"
+          trap 'docker logout >/dev/null 2>&1 || true' EXIT
+          printf '%s' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USERNAME" --password-stdin
+          docker push "$IMAGE_NAME:$IMAGE_VERSION"
+          docker push "$IMAGE_NAME:latest"
+          printf 'Published `%s:%s` and `%s:latest`\n' \
+            "$IMAGE_NAME" "$IMAGE_VERSION" "$IMAGE_NAME" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record published version
+        if: steps.version.outputs.create-tag == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.git.createRef({
+              ...context.repo,
+              ref: `refs/tags/v${process.env.IMAGE_VERSION}`,
+              sha: context.sha
+            });
+
+      - name: Update Docker Hub README
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.IMAGE_NAME }}
+          readme-filepath: ./README.dockerhub.md
+          short-description: Download YouTube videos and MP3 audio through your browser.
 
       - name: Deploy container
         run: |
@@ -52,7 +161,7 @@ jobs:
             --health-timeout 5s \
             --health-start-period 10s \
             --health-retries 3 \
-            "$IMAGE_NAME:$GITHUB_SHA"
+            "$IMAGE_NAME:$IMAGE_VERSION"
 
       - name: Verify deployment
         run: |
@@ -76,7 +185,7 @@ jobs:
         run: |
           set -euo pipefail
           while IFS= read -r image; do
-            if [ "$image" = "$IMAGE_NAME:$GITHUB_SHA" ]; then
+            if [ "$image" = "$IMAGE_NAME:$IMAGE_VERSION" ] || [ "$image" = "$IMAGE_NAME:latest" ]; then
               continue
             fi
             if [ -n "$(docker container ls --all --quiet --filter "ancestor=$image")" ]; then
