@@ -18,7 +18,7 @@ Connect your reverse proxy to the Docker network `web` and configure its upstrea
 
 ## Supported Architectures
 
-The Docker image can be built on Linux x86_64 and Apple Silicon (arm64). Docker selects the appropriate architecture from the multi-platform `python:3.12-slim` base image.
+The GitHub Actions workflow publishes both `linux/amd64` and `linux/arm64` variants under each version tag and `latest`. Docker automatically selects the matching architecture. On macOS Apple Silicon, install Docker Desktop and use the ARM64 Linux image through its Linux virtual machine; no architecture flag is needed.
 
 To build and push an image for both architectures, replace the registry placeholder and run:
 
@@ -43,14 +43,14 @@ Install a self-hosted GitHub Actions runner on your Linux server. Set `jobs.depl
 runs-on: [self-hosted, linux]
 ```
 
-Install Bash and Docker on the server, and ensure the runner user can access the server's Docker daemon. If the runner itself runs in a container, it needs the Docker CLI and access to the host's Docker daemon. Keep the GitHub Actions runner up to date to meet the [requirements for `actions/checkout@v6`](https://github.com/actions/checkout#whats-new).
+Install Bash and Docker on the server, and ensure the runner user can access the server's Docker daemon. The workflow sets up Buildx and QEMU for cross-architecture builds; the daemon must allow privileged containers to register QEMU/binfmt handlers. If the runner itself runs in a container, it needs the Docker CLI and access to the host's Docker daemon. Keep the GitHub Actions runner up to date to meet the [requirements for `actions/checkout@v6`](https://github.com/actions/checkout#whats-new). Emulated builds can take longer, so the deployment job has a 60-minute timeout.
 
 Set these repository secrets in **Settings → Secrets and variables → Actions**:
 
 - `DOCKERHUB_USERNAME`: your Docker Hub username.
 - `DOCKERHUB_TOKEN`: a Docker Hub personal access token with `read/write/delete` scope for publishing images and updating the repository description. For an organization's repository, the user must have Admin permissions for that repository.
 
-The default image repository is `balanial/yourubedl`. To publish to another repository, set the repository variable `DOCKERHUB_IMAGE` to `your-username/youtubedl`. Create the repository on Docker Hub before the first publication and ensure the token can push to it.
+The default image repository is `balanial/youtubedl`. To publish to another repository, set the repository variable `DOCKERHUB_IMAGE` to `your-username/youtubedl`. Create the repository on Docker Hub before the first publication and ensure the token can push to it.
 
 After publishing the image and recording its version, the workflow updates the Docker Hub repository description from `README.dockerhub.md`. This separate README contains startup and usage instructions for image users. If you change the image repository, update the image names in that file as well. A failed description update fails the workflow before deployment.
 
@@ -64,7 +64,7 @@ If several pull requests have merged since the previous version, the workflow in
 
 The workflow publishes both `<image repository>:MAJOR.MINOR.PATCH` and `<image repository>:latest`, then records the published version as a Git tag on the built commit. Rerunning a tagged commit reuses its version. The workflow needs `contents: write` to create tags and `pull-requests: read` to read source branches; repository rules must allow its token to create `v*` tags. The image also includes OCI version and commit revision labels. Published versions appear in the workflow run summary.
 
-The pipeline builds directly on the runner, publishes the image, replaces the `youtubedl` container using the exact versioned image with `docker run`, and checks that the application responds over HTTP inside the container. If publication fails, deployment does not start. Deployment does not use Docker Compose. Access the application through your reverse proxy; port `8000` is not published on the server.
+The pipeline builds both architectures with Buildx on the runner and publishes their shared image manifest to Docker Hub. It then pulls the exact versioned image for the server's architecture, replaces the `youtubedl` container with `docker run`, and checks that the application responds over HTTP inside the container. If publication or pulling the image fails, deployment does not start. Deployment does not use Docker Compose. Access the application through your reverse proxy; port `8000` is not published on the server.
 
 The container joins the existing Docker network `web` at startup. Create this network on your server before the first deployment if needed: `docker network create web`. The workflow checks that the network exists before stopping the current container. Connect your reverse proxy to this network and configure its upstream as `http://youtubedl:8000`.
 
@@ -76,7 +76,7 @@ After a successful deployment check, the workflow removes older local images fro
 
 ## GitLab CI
 
-The GitLab pipeline publishes a multi-platform image to `balanial/yourubedl` on Docker Hub when a SemVer Git tag is pushed:
+The GitLab pipeline publishes a multi-platform image to `balanial/youtubedl` on Docker Hub when a SemVer Git tag is pushed:
 
 ```bash
 git tag v1.0.0
@@ -92,10 +92,10 @@ The runner tagged `docker` must support Docker-in-Docker in privileged mode beca
 
 For the Git tag `v1.2.3`, the pipeline publishes these Docker tags:
 
-- `balanial/yourubedl:1.2.3`
-- `balanial/yourubedl:1.2`
-- `balanial/yourubedl:1`
-- `balanial/yourubedl:latest`
+- `balanial/youtubedl:1.2.3`
+- `balanial/youtubedl:1.2`
+- `balanial/youtubedl:1`
+- `balanial/youtubedl:latest`
 
 ## How It Works
 

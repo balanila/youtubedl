@@ -4,6 +4,12 @@ A web application for downloading YouTube videos and audio through your browser.
 
 The image includes the application, `yt-dlp`, and `ffmpeg`.
 
+Source code: [balanila/youtubedl on GitHub](https://github.com/balanila/youtubedl).
+
+## Supported Platforms
+
+Images are available for Linux x86_64 (`linux/amd64`) and ARM64 (`linux/arm64`), including Macs with Apple Silicon. On macOS, install and start Docker Desktop before running the commands below. Docker automatically selects the correct image architecture; both platforms use the same version tags and `latest`.
+
 ## Start with Docker
 
 Install Docker and run:
@@ -13,7 +19,7 @@ docker run --detach \
   --name youtubedl \
   --publish 127.0.0.1:8000:8000 \
   --restart unless-stopped \
-  balanial/yourubedl:latest
+  balanial/youtubedl:latest
 ```
 
 Open **http://localhost:8000** in a browser on the machine running Docker.
@@ -25,7 +31,7 @@ Save this as `compose.yml`:
 ```yaml
 services:
   youtubedl:
-    image: balanial/yourubedl:latest
+    image: balanial/youtubedl:latest
     ports:
       - "127.0.0.1:8000:8000"
     restart: unless-stopped
@@ -54,7 +60,7 @@ docker run --detach \
   --name youtubedl \
   --network web \
   --restart unless-stopped \
-  balanial/yourubedl:latest
+  balanial/youtubedl:latest
 ```
 
 Configure the proxy's upstream as **http://youtubedl:8000** and open the URL configured in your proxy. This setup does not publish a port on the host. Use one of these startup methods at a time; the Docker commands use the same container name.
@@ -80,6 +86,6 @@ docker compose up -d
 
 Stop and remove the Compose containers with `docker compose down`.
 
-For a container started with `docker run`, stop it with `docker stop youtubedl`. To update it, run `docker pull balanial/yourubedl:latest`, remove the stopped container with `docker rm youtubedl`, and repeat your chosen startup command. Updates interrupt active downloads.
+For a container started with `docker run`, stop it with `docker stop youtubedl`. To update it, run `docker pull balanial/youtubedl:latest`, remove the stopped container with `docker rm youtubedl`, and repeat your chosen startup command. Updates interrupt active downloads.
 
 Some YouTube videos require authentication or cookies; cookie configuration is not currently supported. Only download content you own or have permission to download.
