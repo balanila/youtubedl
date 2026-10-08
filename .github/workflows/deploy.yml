@@ -22,7 +22,6 @@ jobs:
       IMAGE_NAME: ${{ vars.DOCKERHUB_IMAGE || 'balanial/youtubedl' }}
       CONTAINER_NAME: youtubedl
       INITIAL_VERSION: '1.0.0'
-      DOCKER_CONFIG: ${{ runner.temp }}/docker-${{ github.run_id }}-${{ github.run_attempt }}
     defaults:
       run:
         shell: bash
@@ -41,7 +40,9 @@ jobs:
           set -euo pipefail
           : "${DOCKERHUB_USERNAME:?Set the DOCKERHUB_USERNAME repository secret}"
           : "${DOCKERHUB_TOKEN:?Set the DOCKERHUB_TOKEN repository secret}"
-          mkdir -p "$DOCKER_CONFIG"
+          docker_config="$RUNNER_TEMP/docker-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          mkdir -p "$docker_config"
+          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
 
       - name: Prepare image version
         id: version
